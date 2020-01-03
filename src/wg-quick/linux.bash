@@ -233,7 +233,7 @@ add_default() {
 	printf -v nftcmd '%sadd rule %s %s postmangle meta l4proto udp mark %d ct mark set mark \n' "$nftcmd" "$pf" "$nftable" $table
 	printf -v nftcmd '%sadd rule %s %s premangle meta l4proto udp meta mark set ct mark \n' "$nftcmd" "$pf" "$nftable"
 	[[ $proto == -4 ]] && cmd sysctl -q net.ipv4.conf.all.src_valid_mark=1
-	if type -p nft >/dev/null; then
+	if [[ $(nft --version 2>/dev/null) =~ .*v([0-9.]+).* && $(printf '%s\n0.7\n' "${BASH_REMATCH[1]}" | sort -Vr) == "$(printf '%s\n0.7\n' "${BASH_REMATCH[1]}")" ]]; then
 		cmd nft -f <(echo -n "$nftcmd")
 	else
 		echo -n "$restore" | cmd $iptables-restore -n
