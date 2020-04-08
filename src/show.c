@@ -103,6 +103,18 @@ static char *ip(const struct wgallowedip *ip)
 	return buf;
 }
 
+static char *bind_addr(const struct addr_struct *addr)
+{
+	static char buf[INET6_ADDRSTRLEN + 1];
+
+	memset(buf, 0, INET6_ADDRSTRLEN + 1);
+	if (addr->addr.sa_family == AF_INET)
+		inet_ntop(AF_INET, &addr->addr4.sin_addr, buf, INET6_ADDRSTRLEN);
+	else if ((addr->addr.sa_family == AF_INET6) || (addr->addr.sa_family == AF_UNSPEC))
+		inet_ntop(AF_INET6, &addr->addr6.sin6_addr, buf, INET6_ADDRSTRLEN);
+	return buf;
+}
+
 static char *endpoint(const struct sockaddr *addr)
 {
 	char host[4096 + 1];
@@ -218,6 +230,10 @@ static void pretty_print(struct wgdevice *device)
 		terminal_printf("  " TERMINAL_BOLD "private key" TERMINAL_RESET ": %s\n", masked_key(device->private_key));
 	if (device->listen_port)
 		terminal_printf("  " TERMINAL_BOLD "listening port" TERMINAL_RESET ": %u\n", device->listen_port);
+	if (device->bind_addr.addr.sa_family == AF_INET)
+		terminal_printf("  " TERMINAL_BOLD "binding address" TERMINAL_RESET ": %s\n", bind_addr(&device->bind_addr));
+	else if (device->bind_addr.addr.sa_family == AF_INET6)
+		 terminal_printf("  " TERMINAL_BOLD "binding address" TERMINAL_RESET ": [%s]\n", bind_addr(&device->bind_addr));
 	if (device->fwmark)
 		terminal_printf("  " TERMINAL_BOLD "fwmark" TERMINAL_RESET ": 0x%x\n", device->fwmark);
 	if (device->first_peer) {
@@ -259,6 +275,10 @@ static void dump_print(struct wgdevice *device, bool with_interface)
 		printf("%s\t", device->name);
 	printf("%s\t", maybe_key(device->private_key, device->flags & WGDEVICE_HAS_PRIVATE_KEY));
 	printf("%s\t", maybe_key(device->public_key, device->flags & WGDEVICE_HAS_PUBLIC_KEY));
+	if (device->bind_addr.addr.sa_family == AF_INET)
+		printf("%s:", bind_addr(&device->bind_addr));
+	else if (device->bind_addr.addr.sa_family == AF_INET6)
+		printf("[%s]:", bind_addr(&device->bind_addr));
 	printf("%u\t", device->listen_port);
 	if (device->fwmark)
 		printf("0x%x\n", device->fwmark);
@@ -304,6 +324,13 @@ static bool ugly_print(struct wgdevice *device, const char *param, bool with_int
 		if (with_interface)
 			printf("%s\t", device->name);
 		printf("%u\n", device->listen_port);
+	} else if(!strcmp(param, "bind-addr")) {
+		if (with_interface)
+			printf("%s\t", device->name);
+	        if (device->bind_addr.addr.sa_family == AF_INET)
+			printf("%s\n", bind_addr(&device->bind_addr));
+	        else if ((device->bind_addr.addr.sa_family == AF_INET6) || (device->bind_addr.addr.sa_family == AF_UNSPEC))
+			printf("[%s]\n", bind_addr(&device->bind_addr));
 	} else if (!strcmp(param, "fwmark")) {
 		if (with_interface)
 			printf("%s\t", device->name);

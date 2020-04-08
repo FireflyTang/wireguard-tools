@@ -74,6 +74,68 @@ static inline bool parse_port(uint16_t *port, uint32_t *flags, const char *value
 	return ret == 0;
 }
 
+static inline bool parse_bind(struct addr_struct *bind_addr, uint32_t *flags, const char *value){
+	char *mutable = strdup(value);
+	char *begin, *end;
+	bool has_port = false;
+	int ret;
+	struct addrinfo *resolved;
+	struct addrinfo hints = {
+		.ai_family = AF_UNSPEC,
+		.ai_socktype = SOCK_DGRAM,
+		.ai_protocol = IPPROTO_UDP
+	};
+	if (!mutable) {
+		perror("strdup");
+		return false;
+	}
+	if (!strlen(value)) {
+		free(mutable);
+		fprintf(stderr, "Unable to parse empty BindAddress\n");
+		return false;
+	}
+	if (mutable[0] == '[') {
+		begin = &mutable[1];
+		end = strchr(mutable, ']');
+		if (!end) {
+			free(mutable);
+			fprintf(stderr, "Unable to find matching brace of BindAddress: `%s'\n", value);
+			return false;
+		}
+		*end++ = '\0';
+		has_port = strrchr(end, ':');
+	} else {
+		begin = mutable;
+		has_port = strrchr(mutable, ':');
+	}
+	if (has_port) {
+		free(mutable);
+		fprintf(stderr, "BindAddress should not be followed by port: `%s'\n", value);
+		return false;
+	}
+
+	ret = getaddrinfo(begin, NULL, &hints, &resolved);
+	if (ret) {
+		free(mutable);
+		fprintf(stderr, "invalid BindAddress: `%s'\n", value);
+		return false;
+	}
+
+	if (((resolved->ai_family == AF_INET) && (resolved->ai_addrlen == sizeof(struct sockaddr_in))) ||
+	    ((resolved->ai_family == AF_INET6) && (resolved->ai_addrlen == sizeof(struct sockaddr_in6)))) {
+		memcpy(&bind_addr->addr, resolved->ai_addr, resolved->ai_addrlen);
+		*flags |= WGDEVICE_HAS_BIND_ADDR;
+	} else {
+		freeaddrinfo(resolved);
+		free(mutable);
+		fprintf(stderr, "Neither IPv4 nor IPv6 address found in BindAddress: `%s'\n", value);
+		return false;
+	}
+	freeaddrinfo(resolved);
+	free(mutable);
+	return true;
+}
+
 static inline bool parse_fwmark(uint32_t *fwmark, uint32_t *flags, const char *value)
 {
 	unsigned long ret;
@@ -444,6 +506,8 @@ static bool process_line(struct config_ctx *ctx, const char *line)
 	if (ctx->is_device_section) {
 		if (key_match("ListenPort"))
 			ret = parse_port(&ctx->device->listen_port, &ctx->device->flags, value);
+		else if (key_match("BindAddress"))
+			ret = parse_bind(&ctx->device->bind_addr, &ctx->device->flags, value);
 		else if (key_match("FwMark"))
 			ret = parse_fwmark(&ctx->device->fwmark, &ctx->device->flags, value);
 		else if (key_match("PrivateKey")) {
@@ -574,6 +638,11 @@ struct wgdevice *config_read_cmd(char *argv[], int argc)
 	while (argc > 0) {
 		if (!strcmp(argv[0], "listen-port") && argc >= 2 && !peer) {
 			if (!parse_port(&device->listen_port, &device->flags, argv[1]))
+				goto error;
+			argv += 2;
+			argc -= 2;
+		} else if (!strcmp(argv[0], "bind-addr") && argc >= 2 && !peer) {
+			if (!parse_bind(&device->bind_addr, &device->flags, argv[1]))
 				goto error;
 			argv += 2;
 			argc -= 2;
