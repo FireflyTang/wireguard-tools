@@ -161,8 +161,23 @@ again:
 
 		if (dev->flags & WGDEVICE_HAS_PRIVATE_KEY)
 			mnl_attr_put(nlh, WGDEVICE_A_PRIVATE_KEY, sizeof(dev->private_key), dev->private_key);
-		if (dev->flags & WGDEVICE_HAS_LISTEN_PORT)
+		if (dev->flags & WGDEVICE_HAS_LISTEN_PORT) {
+			printf("put WGDEVICE_HAS_LISTEN_PORT %d\n",dev->listen_port);
 			mnl_attr_put_u16(nlh, WGDEVICE_A_LISTEN_PORT, dev->listen_port);
+		}
+		if (dev->flags & WGDEVICE_HAS_BIND_ADDR) {
+			static char buf[INET6_ADDRSTRLEN + 1];
+			if (dev->bind_addr.addr.sa_family == AF_INET) {
+				inet_ntop(AF_INET, &dev->bind_addr.addr4.sin_addr, buf, INET6_ADDRSTRLEN);
+				printf("put WGDEVICE_HAS_BIND_ADDR ipv4: %d %s\n",dev->bind_addr.addr.sa_family,buf);
+				mnl_attr_put_check(nlh, SOCKET_BUFFER_SIZE, WGDEVICE_A_BIND_ADDR, sizeof(struct sockaddr_in), &dev->bind_addr.addr4);
+			} else if (dev->bind_addr.addr.sa_family == AF_INET6) {
+				if(!memcmp(&dev->bind_addr.addr6.sin6_addr, &in6addr_any, sizeof(struct in6_addr))) dev->bind_addr.addr.sa_family = AF_UNSPEC;
+				inet_ntop(AF_INET6, &dev->bind_addr.addr6.sin6_addr, buf, INET6_ADDRSTRLEN);
+				printf("put WGDEVICE_HAS_BIND_ADDR ipv6: %d %s\n",dev->bind_addr.addr.sa_family,buf);
+				mnl_attr_put_check(nlh, SOCKET_BUFFER_SIZE, WGDEVICE_A_BIND_ADDR, sizeof(struct sockaddr_in6), &dev->bind_addr.addr6);
+			}
+		}
 		if (dev->flags & WGDEVICE_HAS_FWMARK)
 			mnl_attr_put_u32(nlh, WGDEVICE_A_FWMARK, dev->fwmark);
 		if (dev->flags & WGDEVICE_REPLACE_PEERS)
@@ -405,6 +420,7 @@ static int parse_peers(const struct nlattr *attr, void *data)
 static int parse_device(const struct nlattr *attr, void *data)
 {
 	struct wgdevice *device = data;
+	struct sockaddr *addr;
 
 	switch (mnl_attr_get_type(attr)) {
 	case WGDEVICE_A_UNSPEC:
@@ -434,6 +450,16 @@ static int parse_device(const struct nlattr *attr, void *data)
 	case WGDEVICE_A_LISTEN_PORT:
 		if (!mnl_attr_validate(attr, MNL_TYPE_U16))
 			device->listen_port = mnl_attr_get_u16(attr);
+		break;
+ 	case WGDEVICE_A_BIND_ADDR:
+		if (mnl_attr_get_payload_len(attr) < sizeof(struct sockaddr))
+			break;
+		addr = mnl_attr_get_payload(attr);
+		if (addr->sa_family == AF_INET && mnl_attr_get_payload_len(attr) == sizeof(struct sockaddr_in))
+			memcpy(&device->bind_addr.addr4, addr, sizeof(struct sockaddr_in));
+		else if (addr->sa_family == AF_INET6 && mnl_attr_get_payload_len(attr) == sizeof(struct sockaddr_in6))
+			memcpy(&device->bind_addr.addr6, addr, sizeof(struct sockaddr_in6));
+		device->flags |= WGDEVICE_HAS_BIND_ADDR;
 		break;
 	case WGDEVICE_A_FWMARK:
 		if (!mnl_attr_validate(attr, MNL_TYPE_U32))

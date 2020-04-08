@@ -103,6 +103,18 @@ static char *ip(const struct wgallowedip *ip)
 	return buf;
 }
 
+static char *bind_addr(const struct addr_struct* addr)
+{
+	static char buf[INET6_ADDRSTRLEN + 1];
+
+	memset(buf, 0, INET6_ADDRSTRLEN + 1);
+	if (addr->addr.sa_family == AF_INET)
+		inet_ntop(AF_INET, &addr->addr4.sin_addr, buf, INET6_ADDRSTRLEN);
+	else if (addr->addr.sa_family == AF_INET6)
+		inet_ntop(AF_INET6, &addr->addr6.sin6_addr, buf, INET6_ADDRSTRLEN);
+	return buf;
+}
+
 static char *endpoint(const struct sockaddr *addr)
 {
 	char host[4096 + 1];
@@ -202,7 +214,7 @@ static char *bytes(uint64_t b)
 static const char *COMMAND_NAME;
 static void show_usage(void)
 {
-	fprintf(stderr, "Usage: %s %s { <interface> | all | interfaces } [public-key | private-key | listen-port | fwmark | peers | preshared-keys | endpoints | allowed-ips | latest-handshakes | transfer | persistent-keepalive | dump]\n", PROG_NAME, COMMAND_NAME);
+	fprintf(stderr, "Usage: %s %s { <interface> | all | interfaces } [public-key | private-key | listen-port | bind-addr | fwmark | peers | preshared-keys | endpoints | allowed-ips | latest-handshakes | transfer | persistent-keepalive | dump]\n", PROG_NAME, COMMAND_NAME);
 }
 
 static void pretty_print(struct wgdevice *device)
@@ -218,6 +230,8 @@ static void pretty_print(struct wgdevice *device)
 		terminal_printf("  " TERMINAL_BOLD "private key" TERMINAL_RESET ": %s\n", masked_key(device->private_key));
 	if (device->listen_port)
 		terminal_printf("  " TERMINAL_BOLD "listening port" TERMINAL_RESET ": %u\n", device->listen_port);
+	if (device->bind_addr.addr.sa_family == AF_INET || device->bind_addr.addr.sa_family == AF_INET6)
+		terminal_printf("  " TERMINAL_BOLD "binding address" TERMINAL_RESET ": %s\n", bind_addr(&device->bind_addr));
 	if (device->fwmark)
 		terminal_printf("  " TERMINAL_BOLD "fwmark" TERMINAL_RESET ": 0x%x\n", device->fwmark);
 	if (device->first_peer) {
