@@ -71,7 +71,16 @@ enum {
 	WGDEVICE_HAS_PRIVATE_KEY = 1U << 1,
 	WGDEVICE_HAS_PUBLIC_KEY = 1U << 2,
 	WGDEVICE_HAS_LISTEN_PORT = 1U << 3,
-	WGDEVICE_HAS_FWMARK = 1U << 4
+	WGDEVICE_HAS_FWMARK = 1U << 4,
+	WGDEVICE_HAS_BIND_ADDR = 1U << 5
+};
+
+struct addr_struct {
+	union {
+		struct sockaddr addr;
+		struct sockaddr_in addr4;
+		struct sockaddr_in6 addr6;
+	};
 };
 
 struct wgdevice {
@@ -87,6 +96,8 @@ struct wgdevice {
 	uint16_t listen_port;
 
 	struct wgpeer *first_peer, *last_peer;
+
+	struct addr_struct bind_addr;
 };
 
 #define for_each_wgpeer(__dev, __peer) for ((__peer) = (__dev)->first_peer; (__peer); (__peer) = (__peer)->next_peer)

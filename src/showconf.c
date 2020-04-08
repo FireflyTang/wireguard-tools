@@ -40,6 +40,17 @@ int showconf_main(int argc, char *argv[])
 	printf("[Interface]\n");
 	if (device->listen_port)
 		printf("ListenPort = %u\n", device->listen_port);
+	if (device->bind_addr.addr.sa_family == AF_INET || device->bind_addr.addr.sa_family == AF_INET6) {
+		static char buf[INET6_ADDRSTRLEN + 1];
+		memset(buf, 0, INET6_ADDRSTRLEN + 1);
+		if (device->bind_addr.addr.sa_family == AF_INET) {
+			inet_ntop(AF_INET, &device->bind_addr.addr4.sin_addr, buf, INET6_ADDRSTRLEN);
+			printf("BindAddress = %s\n", buf);
+		} else if (device->bind_addr.addr.sa_family == AF_INET6) {
+			inet_ntop(AF_INET6, &device->bind_addr.addr6.sin6_addr, buf, INET6_ADDRSTRLEN);
+			printf("BindAddress = [%s]\n", buf);
+		}
+	}
 	if (device->fwmark)
 		printf("FwMark = 0x%x\n", device->fwmark);
 	if (device->flags & WGDEVICE_HAS_PRIVATE_KEY) {
